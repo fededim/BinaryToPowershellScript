@@ -3,7 +3,7 @@ A simple console application to recreate one or more binary files through a Powe
 
 # Usage
 
- -i, --inputs          Required. Specify the input file(s) to process, you can use also a wildcard pattern<br />
+ -i, --inputs          Required. Specify the input file(s) to process, you can use also a wildcard pattern or specify multiple files separted by space<br />
  -o, --outputfolder    Specify the output folder where all the powershell scripts will be generated<br />
  -b, --base64          Specify the base64 file format for the powershell script(s)<br />
  -s, --single          Specify to create just a single script file for all input files<br />
