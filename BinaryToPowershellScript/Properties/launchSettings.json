@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "BinaryToPowershellScript": {
+      "commandName": "Project",
+      "commandLineArgs": "-i .\\*"
+    }
+  }
+}
