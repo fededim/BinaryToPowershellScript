@@ -19,7 +19,7 @@ A simple console application to recreate one or more binary files through a Powe
 
  # Example output
 
-**.\BinaryToPowershellScript.exe -i \.\* c:\windows\*.exe -o c:\temp -s -b**
+**.\BinaryToPowershellScript.exe -i .\\* c:\windows\*.exe -o c:\temp -s -b**
 Scripting file .\\BinaryToPowershellScript.deps.json<br />
 Scripting file .\\BinaryToPowershellScript.dll<br />
 Scripting file .\\BinaryToPowershellScript.exe<br />
