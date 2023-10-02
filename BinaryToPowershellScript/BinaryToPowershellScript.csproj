@@ -5,6 +5,12 @@
     <TargetFramework>net6.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+
+    <Authors>Federico Di Marco</Authors>
+    <Description>Description here</Description>
+    <Copyright>2023</Copyright>
+    <RepositoryUrl>https://github.com/fededim/BinaryToPowershellScript</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
   </PropertyGroup>
 
   <ItemGroup>

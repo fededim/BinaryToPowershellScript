@@ -7,13 +7,13 @@ namespace BinaryToPowershellScript
 {
     public class Options
     {
-        [Option('i', "inputs", Required = true, HelpText = "Specify the input file(s) to process")]
+        [Option('i', "inputs", Required = true, HelpText = "Specify the input file(s) to process, you can use also a wildcard pattern")]
         public IEnumerable<String> Inputs { get; set; }
 
-        [Option('o', "outputfolder", Required = false, HelpText = "Specify the output folder")]
+        [Option('o', "outputfolder", Required = false, HelpText = "Specify the output folder where all the powershell scripts will be generated")]
         public String OutputFolder { get; set; }
 
-        [Option('b', "base64", Required = false, HelpText = "Specify the base64 file format")]
+        [Option('b', "base64", Required = false, HelpText = "Specify the base64 file format for the powershell script(s)")]
         public bool Base64 { get; set; }
 
         [Option('s', "single", Required = false, HelpText = "Specify to create just a single script file for all input files")]
