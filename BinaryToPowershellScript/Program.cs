@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections;
+using System.ComponentModel;
 using System.ComponentModel.Design;
 using System.Security.Cryptography;
 using System.Text;
@@ -9,11 +10,11 @@ namespace BinaryToPowershellScript
 {
     public class Options
     {
-        [Option('i', "inputs", Required = true, HelpText = "Specify the input file(s) to process, you can use also a wildcard pattern")]
-        public IEnumerable<String> Inputs { get; set; }
+        [Option('i', "inputs", Required = true, HelpText = "Specifies the input file(s) to process, you can use also a wildcard pattern or specify multiple files separted by space")]
+        public IEnumerable<String>? Inputs { get; set; }
 
         [Option('o', "outputfolder", Required = false, HelpText = "Specify the output folder where all the powershell scripts will be generated")]
-        public String OutputFolder { get; set; }
+        public String? OutputFolder { get; set; }
 
         [Option('b', "base64", Required = false, HelpText = "Specify the base64 file format for the powershell script(s)")]
         public bool Base64 { get; set; }
@@ -21,18 +22,18 @@ namespace BinaryToPowershellScript
         [Option('s', "single", Required = false, HelpText = "Specify to create just a single script file for all input files")]
         public bool SingleFile { get; set; }
 
-        [Option('r', "randomizevariables", Required = false, HelpText = "Specify to create random variables names in the script")]
-        public bool Randomize { get; set; }
-
         [Option('p', "password", Required = false, HelpText = "Specify the password used to encrypt data with AES")]
-        public String Password { get; set; }
+        public String? Password { get; set; }
 
+        [Option('r', "recurse", Required = false, HelpText = "Specify to perform recursive search on all input file(s)")]
+        public bool Recurse { get; set; }
     }
 
 
     class Program
     {
         const int KEYSIZE = 256;
+
 
         public static void Main(string[] args)
         {
@@ -56,11 +57,13 @@ namespace BinaryToPowershellScript
                     CryptoStream cryptoStream = new CryptoStream(memoryStream, AES.CreateEncryptor(), CryptoStreamMode.Write);
 
                     memoryStream.Write(pbkdf2DerivedBytes.Salt, 0, 16);  // 16 bytes of SALT for PBKDF2 derivation function, must not be encrypted
-                    memoryStream.Write(AES.IV, 0, 16);  // IV is always 128 bits, must not be encrypted
+                    memoryStream.Write(AES.IV, 0, 16);  // IV is always 128 bits for AES, must not be encrypted
                     cryptoStream.Write(input, 0, input.Length);
                     cryptoStream.FlushFinalBlock();
 
-                    Console.WriteLine($"Password {password} Salt {BitConverter.ToString(pbkdf2DerivedBytes.Salt)} IV {BitConverter.ToString(AES.IV)} Key {BitConverter.ToString(AES.Key)} Input {BitConverter.ToString(input)} ActualPosition {memoryStream.Length}");
+                    // uncomment this line to debug encryption
+                    //Console.WriteLine($"Password {password} Salt {BitConverter.ToString(pbkdf2DerivedBytes.Salt)} IV {BitConverter.ToString(AES.IV)} Key {BitConverter.ToString(AES.Key)} Input {BitConverter.ToString(input)} ActualPosition {memoryStream.Length}");
+
                     return memoryStream.ToArray();
                 }
             }
@@ -70,10 +73,19 @@ namespace BinaryToPowershellScript
         private static StringBuilder CreateScriptHeader(Options o)
         {
             var script = new StringBuilder();
-            script.Append($"param ([parameter(Mandatory={(String.IsNullOrEmpty(o.Password) ? "$false" : "$true")})] [String] $Password)\n\n");
-            script.Append("$setContentHelp = (help Set-Content) | Out-String\nif ($setContentHelp.Contains(\"AsByteStream\")) { $core = $true } else { $core = $false }");
+
 
             if (!String.IsNullOrEmpty(o.Password))
+            {
+                // uncomment these lines and put them in the decryptBytes function below (row "$Dec = $AES.CreateDecryptor()") to troubleshoot encryption
+                //Write - Host ""Password $password""
+                //Write - Host ""KEY: $([System.BitConverter]::ToString($AES.Key))""
+                //Write - Host ""IV: $([System.BitConverter]::ToString($AES.IV))""
+                //Write - Host ""EncryptedData: $([System.BitConverter]::ToString($EncryptedData))""
+
+                // uncomment these lines and put them in the decryptBytes function below (row ",$result") to troubleshoot encryption
+                //Write - Host ""DecryptedData: $([System.BitConverter]::ToString($result))""
+
                 script.Append(@$"function decryptBytes {{
     [OutputType([byte[]])]
     Param (
@@ -101,11 +113,6 @@ namespace BinaryToPowershellScript
 	$AES.Mode = [System.Security.Cryptography.CipherMode]::CBC
 	$AES.Padding = [System.Security.Cryptography.PaddingMode]::PKCS7
 
-	Write-Host ""Password $password""
-	Write-Host ""KEY: $([System.BitConverter]::ToString($AES.Key))""
-	Write-Host ""IV: $([System.BitConverter]::ToString($AES.IV))""
-	Write-Host ""EncryptedData: $([System.BitConverter]::ToString($EncryptedData))""
-
 	$Dec = $AES.CreateDecryptor()
 
 	$EncryptedMemoryStream = New-Object System.IO.MemoryStream @(,$EncryptedData)
@@ -115,11 +122,34 @@ namespace BinaryToPowershellScript
 	$CryptoStream.CopyTo($DecryptedMemoryStream)
 	
 	$result = $DecryptedMemoryStream.ToArray()
-	Write-Host ""DecryptedData: $([System.BitConverter]::ToString($result))""
 
 	,$result
-}}");
-            script.Append("\n\n");
+}}
+
+");
+            }
+
+            var decryptBytes = String.IsNullOrEmpty(o.Password) ? String.Empty : "\t\t$bytes = $(decryptBytes $bytes $password)";
+
+            script.Append($@"function createFile  {{
+	param (
+		[parameter(Mandatory=$true)] [String] $file,
+		[parameter(Mandatory=$true)] [byte[]] $bytes,
+		[parameter(Mandatory=$false)] [String] $password)
+	
+		$null = New-Item -ItemType Directory -Path ([System.IO.Path]::GetDirectoryName($file)) -Force
+{decryptBytes}
+		if ($global:core) {{ Set-Content -Path $file -Value $bytes -AsByteStream -Force }} else {{ Set-Content test.txt -Value $bytes -Encoding Byte -Force }}
+
+        Write-Host ""Created file $file Length $($bytes.Length)""
+	}}
+
+");
+
+
+
+            script.Append($"function createFiles  {{\n\tparam ([parameter(Mandatory={(String.IsNullOrEmpty(o.Password) ? "$false" : "$true")})] [String] $password)\n\n");
+            script.Append("\t$setContentHelp = (help Set-Content) | Out-String\n\tif ($setContentHelp.Contains(\"AsByteStream\")) { $global:core = $true } else { $global:core = $false }\n\n");
 
             return script;
         }
@@ -136,7 +166,9 @@ namespace BinaryToPowershellScript
             var outputFile = Path.Combine(o.OutputFolder, $"SingleScript{(o.Base64 ? "_base64" : String.Empty)}.ps1");
 
             foreach (var input in o.Inputs)
-                foreach (var file in Directory.GetFileSystemEntries(Path.GetDirectoryName(input), Path.GetFileName(input)))
+            {
+                var path = Path.GetDirectoryName(input);
+                foreach (var file in Directory.GetFiles(!String.IsNullOrEmpty(path) ? path : ".", Path.GetFileName(input), o.Recurse ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly))
                 {
 
                     if (!o.SingleFile)
@@ -152,11 +184,11 @@ namespace BinaryToPowershellScript
 
                     if (o.Base64)
                     {
-                        script.Append($"[byte[]] $bytes = [Convert]::FromBase64String('{Convert.ToBase64String(bytes)}')");
+                        script.Append($"\t[byte[]] $bytes = [Convert]::FromBase64String('{Convert.ToBase64String(bytes)}')");
                     }
                     else
                     {
-                        script.Append("[byte[]] $bytes = ");
+                        script.Append("\t[byte[]] $bytes = ");
 
                         foreach (var b in bytes)
                             script.Append($"0x{b.ToString("X2")},");
@@ -164,16 +196,20 @@ namespace BinaryToPowershellScript
                         script.Length--;
                     }
 
-                    var bytesString = String.IsNullOrEmpty(o.Password) ? "$bytes" : "(decryptBytes $bytes $Password)";
-                    script.Append($"\nif ($core) {{ Set-Content -Path {Path.GetFileName(file)} -Value {bytesString} -AsByteStream }} else {{ Set-Content {Path.GetFileName(file)} -Value {bytesString} -Encoding Byte }}{(o.SingleFile ? "\n\n" : String.Empty)}");
+                    script.Append($"\n\tcreateFile '{file}' $bytes $password\n\n");
 
                     if (!o.SingleFile)
+                    {
+                        script.Append($"}}\n\ncreateFiles '{o.Password}'\n");
                         File.WriteAllText(outputFile, script.ToString());
+                    }
                 }
+            }
 
             if (o.SingleFile)
             {
                 Console.WriteLine($"Creating single script file {outputFile}...");
+                script.Append($"}}\n\ncreateFiles {o.Password}\n");
                 File.WriteAllText(outputFile, script.ToString());
             }
         }
