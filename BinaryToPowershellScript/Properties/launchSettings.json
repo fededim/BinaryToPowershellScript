@@ -2,7 +2,7 @@
   "profiles": {
     "BinaryToPowershellScript": {
       "commandName": "Project",
-      "commandLineArgs": "-i .\\*"
+      "commandLineArgs": "-i .\\* -o c:\\temp -p password"
     }
   }
 }
