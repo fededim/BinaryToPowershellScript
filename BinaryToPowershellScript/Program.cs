@@ -70,10 +70,11 @@ namespace BinaryToPowershellScript
         private static StringBuilder CreateScriptHeader(Options o)
         {
             var script = new StringBuilder();
-            script.Append($"param ([parameter(Mandatory={(String.IsNullOrEmpty(o.Password)?"$false":"$true")})] [String] $Password)\n\n");
-            script.Append("$setContentHelp = (help Set-Content) | Out-String\nif ($setContentHelp.Contains(\"AsByteStream\")) { $core = $true } else { $core = $false }\n\n");
-    
-            script.Append(@$"function decryptBytes {{
+            script.Append($"param ([parameter(Mandatory={(String.IsNullOrEmpty(o.Password) ? "$false" : "$true")})] [String] $Password)\n\n");
+            script.Append("$setContentHelp = (help Set-Content) | Out-String\nif ($setContentHelp.Contains(\"AsByteStream\")) { $core = $true } else { $core = $false }");
+
+            if (!String.IsNullOrEmpty(o.Password))
+                script.Append(@$"function decryptBytes {{
     [OutputType([byte[]])]
     Param (
 		[parameter(Mandatory=$true)] [System.Byte[]] $bytes,
