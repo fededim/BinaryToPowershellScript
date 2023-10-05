@@ -5,7 +5,7 @@ A simple console application to recreate one or more binary files through a Powe
 
  -i, --inputs          Required. Specify the input file(s) to process, you can use also a wildcard pattern or specify multiple files separted by space<br />
  -o, --outputfolder    Specify the output folder where all the powershell scripts will be generated<br />
- -b, --base64          Specify the base64 file format for the powershell script(s), otherwise the hex binary format will be used. <br />
+ -b, --base64          Specify the base64 file format for the powershell script(s), otherwise the hex text format will be used. <br />
  -s, --single          Specify to create just a single script file for all input files<br />
  -r, --recurse         Specify to perform recursive search on all input file(s)<br />
  --help                Display this help screen.<br />
