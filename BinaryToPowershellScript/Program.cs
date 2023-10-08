@@ -19,6 +19,12 @@ namespace BinaryToPowershellScript
         [Option('b', "base64", Required = false, HelpText = "Specify the base64 file format for the powershell script(s)")]
         public bool Base64 { get; set; }
 
+        [Option('d', "decimal", Required = false, HelpText = "Specify the decimal file format for the powershell script(s)")]
+        public bool Decimal { get; set; }
+
+        [Option('h', "hash", Required = false, HelpText = "Specify add SHA256 hash as check on file integrity for the powershell script(s)")]
+        public bool Hash { get; set; }
+
         [Option('s', "single", Required = false, HelpText = "Specify to create just a single script file for all input files")]
         public bool SingleFile { get; set; }
 
@@ -38,6 +44,17 @@ namespace BinaryToPowershellScript
         public static void Main(string[] args)
         {
             Parser.Default.ParseArguments<Options>(args).WithParsed<Options>(o => CreateScript(o));
+        }
+
+
+
+        static string ComputeSha256Hash(byte[] bytes)
+        {
+            using (SHA256 sha256Hash = SHA256.Create())
+            {
+                return BitConverter.ToString(sha256Hash.ComputeHash(bytes)).Replace("-",String.Empty);
+            }
+
         }
 
 
@@ -135,11 +152,19 @@ namespace BinaryToPowershellScript
 	param (
 		[parameter(Mandatory=$true)] [String] $file,
 		[parameter(Mandatory=$true)] [byte[]] $bytes,
-		[parameter(Mandatory=$false)] [String] $password)
+		[parameter(Mandatory=$false)] [String] $password,
+		[parameter(Mandatory=$false)] [String] $hash)
 	
 		$null = New-Item -ItemType Directory -Path ([System.IO.Path]::GetDirectoryName($file)) -Force
 {decryptBytes}
 		if ($global:core) {{ Set-Content -Path $file -Value $bytes -AsByteStream -Force }} else {{ Set-Content test.txt -Value $bytes -Encoding Byte -Force }}
+
+        if (![String]::IsNullOrEmpty($hash)) {{
+            $actualHash = (Get-FileHash -Path $file -Algorithm Sha256).Hash
+            if ($actualHash -ne $hash) {{
+                Write-Error ""Integrity check failed on $file expected $hash actual $actualHash!""
+            }}
+        }}
 
         Write-Host ""Created file $file Length $($bytes.Length)""
 	}}
@@ -180,7 +205,9 @@ namespace BinaryToPowershellScript
 
                     Console.WriteLine($"Scripting file {file} {(!o.SingleFile ? $"into {outputFile}..." : String.Empty)}");
 
-                    var bytes = String.IsNullOrEmpty(o.Password) ? File.ReadAllBytes(file) : EncryptBytes(File.ReadAllBytes(file), o.Password);
+                    var inputBytes = File.ReadAllBytes(file);
+
+                    var bytes = String.IsNullOrEmpty(o.Password) ? inputBytes : EncryptBytes(inputBytes, o.Password);
 
                     if (o.Base64)
                     {
@@ -191,12 +218,17 @@ namespace BinaryToPowershellScript
                         script.Append("\t[byte[]] $bytes = ");
 
                         foreach (var b in bytes)
-                            script.Append($"0x{b.ToString("X2")},");
+                        {
+                            if (o.Decimal)
+                                script.Append($"{b.ToString("D")},");
+                            else
+                                script.Append($"0x{b.ToString("X2")},");
+                        }
 
                         script.Length--;
                     }
 
-                    script.Append($"\n\tcreateFile '{file}' $bytes $password\n\n");
+                    script.Append($"\n\tcreateFile '{file}' $bytes $password {(o.Hash ? $"'{ComputeSha256Hash(inputBytes)}'":String.Empty)}\n\n");
 
                     if (!o.SingleFile)
                     {
