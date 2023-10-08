@@ -22,7 +22,7 @@ namespace BinaryToPowershellScript
         [Option('d', "decimal", Required = false, HelpText = "Specify the decimal file format for the powershell script(s)")]
         public bool Decimal { get; set; }
 
-        [Option('h', "hash", Required = false, HelpText = "Specify add SHA256 hash as check on file integrity for the powershell script(s)")]
+        [Option('h', "hash", Required = false, HelpText = "Specify to add a SHA256 hash as check on file integrity for the powershell script(s)")]
         public bool Hash { get; set; }
 
         [Option('s', "single", Required = false, HelpText = "Specify to create just a single script file for all input files")]
