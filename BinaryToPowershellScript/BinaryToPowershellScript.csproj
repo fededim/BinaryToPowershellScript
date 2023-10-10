@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -8,12 +8,13 @@
     <PublishSingleFile>true</PublishSingleFile>
     <Version>1.0.0</Version>
     <SourceRevisionId>build_$([System.DateTime]::UtcNow.ToString("yyyy_MM_dd_HH_mm_ss"))</SourceRevisionId>
-
     <Authors>Federico Di Marco</Authors>
-    <Description>Description here</Description>
+    <Description>A tool which converts one or more binary files into one or more Powershell scripts in order to recreate them</Description>
     <Copyright>$([System.DateTime]::UtcNow.Year)</Copyright>
     <RepositoryUrl>https://github.com/fededim/BinaryToPowershellScript</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/fededim/BinaryToPowershellScript</PackageProjectUrl>
+    <Title>$(AssemblyName)</Title>
   </PropertyGroup>
 
   <ItemGroup>
