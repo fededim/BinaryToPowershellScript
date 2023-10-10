@@ -7,7 +7,7 @@ A simple console application to recreate one or more binary files through a Powe
  -o, --outputfolder    Specify the output folder where all the powershell scripts will be generated<br />
  -b, --base64          Specify the base64 file format for the powershell script(s), otherwise the hex text format will be used. <br />
  -d, --decimal         Specify the decimal file format for the powershell script(s). <br />
- -h, --hash            Specify add SHA256 hash as check on file integrity for the powershell script(s). <br />
+ -h, --hash            Specify to add a SHA256 hash as check on file integrity for the powershell script(s). <br />
  -s, --single          Specify to create just a single script file for all input files<br />
  -p, --password        Specify the password used to encrypt data with AES. <br />
  -r, --recurse         Specify to perform recursive search on all input file(s)<br />
@@ -70,7 +70,7 @@ Scripting file \windows\write.exe into c:\temp\write_exe_script.ps1...
 # Example of generated script files
 
 **Single Base64 Script**
-<img width="1280" alt="image" src="https://github.com/fededim/BinaryToPowershellScript/assets/8364158/56cf6b63-a21a-4766-96e4-93469750b254">
+<img width="1280" alt="image" src="https://github.com/fededim/BinaryToPowershellScript/assets/8364158/412e4480-eae3-4084-a9d2-d3b187264c65">
 
 **ByteArray Script per file**
-<img width="1280" alt="image" src="https://github.com/fededim/BinaryToPowershellScript/assets/8364158/0ef279d2-d561-4267-8f36-799d056ecdd0">
+<img width="1280" alt="image" src="https://github.com/fededim/BinaryToPowershellScript/assets/8364158/e4194684-ceb1-4116-9547-fba76038ee16">
