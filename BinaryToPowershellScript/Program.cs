@@ -157,7 +157,7 @@ namespace BinaryToPowershellScript
 	
 		$null = New-Item -ItemType Directory -Path ([System.IO.Path]::GetDirectoryName($file)) -Force
 {decryptBytes}
-		if ($global:core) {{ Set-Content -Path $file -Value $bytes -AsByteStream -Force }} else {{ Set-Content test.txt -Value $bytes -Encoding Byte -Force }}
+		if ($global:core) {{ Set-Content -Path $file -Value $bytes -AsByteStream -Force }} else {{ Set-Content -Path $file -Value $bytes -Encoding Byte -Force }}
 
         if (![String]::IsNullOrEmpty($hash)) {{
             $actualHash = (Get-FileHash -Path $file -Algorithm Sha256).Hash

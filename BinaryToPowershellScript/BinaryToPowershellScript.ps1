@@ -16,15 +16,15 @@ function BinaryToPowershellScript {
 	[System.IO.Directory]::SetCurrentDirectory((Get-Location).Path)
 	
 	if ([System.String]::IsNullOrEmpty($OutputFolder)) {
-		$OutputFolder = (Resolve-Path '.').Path
+		$OutputFolder = '.'
 	}
 
 	$script = CreateScriptHeader $Password
 	$outputFile = [System.IO.Path]::Combine($OutputFolder,"SingleScript$(TernaryExpression $Base64 "_base64" '').ps1")
-	foreach ($inputFiles in $Inputs)
+	foreach ($inputFile in $Inputs)
 	{
-		$path = [System.IO.Path]::GetDirectoryName($inputFiles)
-		foreach ($file in [System.IO.Directory]::GetFiles($path, [System.IO.Path]::GetFileName($inputFiles), (TernaryExpression $Recurse ([System.IO.SearchOption] 'AllDirectories') ([System.IO.SearchOption] 'TopDirectoryOnly'))))
+		$path = [System.IO.Path]::GetDirectoryName($inputFile)
+		foreach ($file in [System.IO.Directory]::GetFiles((TernaryExpression (![System.String]::IsNullOrEmpty($path)) $path '.'), [System.IO.Path]::GetFileName($inputFile), (TernaryExpression $Recurse ([System.IO.SearchOption] 'AllDirectories') ([System.IO.SearchOption] 'TopDirectoryOnly'))))
 		{
 			if (!$singlefile)
 			{
@@ -33,8 +33,8 @@ function BinaryToPowershellScript {
 			}
 			$additionalText = TernaryExpression (!$SingleFile) "into $outputFile..." ''
 			Write-Host "Scripting file $file $additionalText"
-			$inputFilesBytes = [System.IO.File]::ReadAllBytes($file)
- 			[byte[]] $bytes = TernaryExpression ([System.String]::IsNullOrEmpty($Password)) $inputFilesBytes (EncryptBytes $inputFilesBytes  $Password)
+			$inputFileBytes = [System.IO.File]::ReadAllBytes($file)
+ 			[byte[]] $bytes = TernaryExpression ([System.String]::IsNullOrEmpty($Password)) $inputFileBytes (EncryptBytes $inputFileBytes  $Password)
 			if ($Base64)
 			{
 				$b64 = [System.Convert]::ToBase64String($bytes)
@@ -56,7 +56,7 @@ function BinaryToPowershellScript {
 				}
 				($script.Length--)
 			}
-			$hashParameter = TernaryExpression $Hash "`'$(ComputeSha256Hash($inputFilesBytes))`'" ''
+			$hashParameter = TernaryExpression $Hash "`'$(ComputeSha256Hash($inputFileBytes))`'" ''
 			[void] $script.Append("`n`tcreateFile `'$file`' `$bytes `$password $hashParameter`n`n")
 			if (!$SingleFile) {
 				[void] $script.Append("`}`n`ncreateFiles `'$Password`'`n")
@@ -112,7 +112,7 @@ function EncryptBytes
 {
    [OutputType([byte[]])]
     Param (
-		[Parameter(Mandatory=$true)] [System.Byte[]] $inputFiles,
+		[Parameter(Mandatory=$true)] [System.Byte[]] $inputFile,
 		[Parameter(Mandatory=$false)] [System.String] $password
 	) 
 
@@ -132,7 +132,7 @@ function EncryptBytes
 			[System.Security.Cryptography.CryptoStream]$cryptoStream = (New-Object -TypeName System.Security.Cryptography.CryptoStream -ArgumentList $memoryStream,$AES.CreateEncryptor(),([System.Security.Cryptography.CryptoStreamMode] 'Write'))
 			$memoryStream.Write($pbkdf2DerivedBytes.Salt,0,16)
 			$memoryStream.Write($AES.IV,0,16)
-			$cryptoStream.Write($inputFiles,0,$inputFiles.Length)
+			$cryptoStream.Write($inputFile,0,$inputFile.Length)
 			$cryptoStream.FlushFinalBlock()
 			return ,$memoryStream.ToArray()
 		}
@@ -191,7 +191,7 @@ function decryptBytes `{
 `t# Setup our decryptor
 `t`$AES = [Security.Cryptography.Aes]::Create()
 `t`$AES.KeySize = $global:KEYSIZE
-`t`$AES.Key = `$PBKDF2.GetBytes((global:KEYSIZE/8))
+`t`$AES.Key = `$PBKDF2.GetBytes($($global:KEYSIZE/8))
 `t`$AES.IV = `$IV
 `t`$AES.Mode = [System.Security.Cryptography.CipherMode]::CBC
 `t`$AES.Padding = [System.Security.Cryptography.PaddingMode]::PKCS7
@@ -223,16 +223,16 @@ function createFile  `{
 	
 `t`$null = New-Item -ItemType Directory -Path ([System.IO.Path]::GetDirectoryName(`$file)) -Force
 `t$decryptBytes
-`tif (`$global:core) `{ Set-Content -Path `$file -Value `$bytes -AsByteStream -Force `} else `{ Set-Content test.txt -Value `$bytes -Encoding Byte -Force `}
+`tif (`$global:core) `{ Set-Content -Path `$file -Value `$bytes -AsByteStream -Force `} else `{ Set-Content -Path `$file -Value `$bytes -Encoding Byte -Force `}
 
 `tif (![System.String]::IsNullOrEmpty(`$hash)) `{
 `t`t`$actualHash = (Get-FileHash -Path `$file -Algorithm Sha256).Hash
 `t`tif (`$actualHash -ne `$hash) `{
-`t`t`tWrite-Error ''Integrity check failed on `$file expected `$hash actual `$actualHash!''
+`t`t`tWrite-Error "Integrity check failed on `$file expected `$hash actual `$actualHash!"
 `t`t`}
 `t`}
 
-`tWrite-Host ''Created file `$file Length `$(`$bytes.Length)''
+`tWrite-Host "Created file `$file Length `$(`$bytes.Length)"
 `}
 
 "@)
