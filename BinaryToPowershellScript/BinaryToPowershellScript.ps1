@@ -8,32 +8,60 @@ function BinaryToPowershellScript {
 		[Parameter(Mandatory=$false)] [Alias('h')] [switch] $Hash=$false,
 		[Parameter(Mandatory=$false)] [Alias('s')] [switch] $SingleFile=$false,
 		[Parameter(Mandatory=$false)] [Alias('r')] [switch] $Recurse=$false,
+		[Parameter(Mandatory=$false)] [Alias('c')] [switch] $Compress=$false,
 		[Parameter(Mandatory=$false)] [Alias('p')] [String] $Password
 	)
 
 	$global:KEYSIZE = 256
 
-	[System.IO.Directory]::SetCurrentDirectory((Get-Location).Path)
-	
+	[System.IO.Directory]::SetCurrentDirectory((Convert-Path (Get-Location).Path))
+
 	if ([System.String]::IsNullOrEmpty($OutputFolder)) {
 		$OutputFolder = '.'
 	}
 
 	$script = CreateScriptHeader $Password
+
 	$outputFile = [System.IO.Path]::Combine($OutputFolder,"SingleScript$(TernaryExpression $Base64 "_base64" '').ps1")
 	foreach ($inputFile in $Inputs)
 	{
-		$path = [System.IO.Path]::GetDirectoryName($inputFile)
-		foreach ($file in [System.IO.Directory]::GetFiles((TernaryExpression (![System.String]::IsNullOrEmpty($path)) $path '.'), [System.IO.Path]::GetFileName($inputFile), (TernaryExpression $Recurse ([System.IO.SearchOption] 'AllDirectories') ([System.IO.SearchOption] 'TopDirectoryOnly'))))
+		$path = ([System.IO.Path]::GetDirectoryName($inputFile))
+
+		if (![System.String]::IsNullOrEmpty($path) -and !($path -eq ".")) {
+			$path = (Resolve-Path -Relative (Convert-Path $path))
+		}
+		else {
+			$path = "."
+		}
+
+		$path
+
+		foreach ($file in [System.IO.Directory]::GetFiles($path, [System.IO.Path]::GetFileName($inputFile), (TernaryExpression $Recurse ([System.IO.SearchOption] 'AllDirectories') ([System.IO.SearchOption] 'TopDirectoryOnly'))))
 		{
 			if (!$singlefile)
 			{
-				$script = createscriptheader $password
-				$outputfile = [System.IO.Path]::combine($outputfolder,"$([System.IO.Path]::getfilename($file).replace(".", "_"))_script$(ternaryexpression $base64 "_base64" '').ps1")
+				$script = CreateScriptHeader $password
+				$outputfile = [System.IO.Path]::Combine($outputfolder,"$([System.IO.Path]::GetFileName($file).replace(".", "_"))_script$(ternaryexpression $base64 "_base64" '').ps1")
 			}
 			$additionalText = TernaryExpression (!$SingleFile) "into $outputFile..." ''
-			Write-Host "Scripting file $file $additionalText"
+			Write-Host -NoNewline "Scripting file $file $additionalText"
+
 			$inputFileBytes = [System.IO.File]::ReadAllBytes($file)
+			$hashParameter = TernaryExpression $Hash "`'$(ComputeSha256Hash($inputFileBytes))`'" ''
+
+			if ($Compress) {
+				$compressedFileBytes = copyBytesToStream $inputFileBytes $false { param ($EncryptedStream) New-Object System.IO.Compression.DeflateStream($EncryptedStream, [System.IO.Compression.CompressionMode] 'Compress') } 
+
+				if ($compressedFileBytes.Length -lt $inputFileBytes.Length) {
+					$inputFileBytes = $compressedFileBytes
+					$ActualCompress=$true
+				}
+				else {
+					Write-Host -NoNewline "compression useless, disabling it..."
+					$ActualCompress=$false
+				}
+			}
+
  			[byte[]] $bytes = TernaryExpression ([System.String]::IsNullOrEmpty($Password)) $inputFileBytes (EncryptBytes $inputFileBytes  $Password)
 			if ($Base64)
 			{
@@ -54,23 +82,58 @@ function BinaryToPowershellScript {
 						[void] $script.Append("0x$($b.ToString('X2')),")
 					}
 				}
-				($script.Length--)
+				[void] ($script.Length--)
 			}
-			$hashParameter = TernaryExpression $Hash "`'$(ComputeSha256Hash($inputFileBytes))`'" ''
-			[void] $script.Append("`n`tcreateFile `'$file`' `$bytes `$password $hashParameter`n`n")
+
+			[void] $script.Append("`n`tcreateFile `'$file`' `$bytes `$password $hashParameter `$$ActualCompress`n`n")
 			if (!$SingleFile) {
 				[void] $script.Append("`}`n`ncreateFiles `'$Password`'`n")
-				[System.IO.File]::WriteAllText($outputFile,$script.ToString())
+
+				$outputScript = $script.ToString()
+				[System.IO.File]::WriteAllText($outputFile,$outputScript)
+				Write-Host "length $([Math]::Round($outputScript.Length/1024))KB."
+			}
+			else {
+				Write-Host "`n"
 			}
 		}
 	}
 	if ($SingleFile)
 	{
-		Write-Host "Creating single script file $outputFile..."
 		[void] $script.Append("`}`n`ncreateFiles `'$Password`'`n")
-		[System.IO.File]::WriteAllText($outputFile,$script.ToString())
+
+		$outputScript = $script.ToString()
+		[System.IO.File]::WriteAllText($outputFile,$outputScript)
+		Write-Host "Created single script file $outputFile length $([Math]::Round($outputScript.Length/1024))KB."
 	}
 }
+
+
+function copyBytesToStream  {
+	[OutputType([byte[]])]
+	Param (
+		[Parameter(Mandatory=$true)] [byte[]] $bytes,
+		[Parameter(Mandatory=$true)] [System.Boolean] $fromStream,
+		[Parameter(Mandatory=$true)] [ScriptBlock] $streamCallback)
+
+	$InputMemoryStream = New-Object System.IO.MemoryStream @(,$bytes)
+	$OutputMemoryStream = New-Object System.IO.MemoryStream
+
+	$stream = (Invoke-Command $streamCallback -ArgumentList (TernaryExpression $fromStream $InputMemoryStream $OutputMemoryStream))
+
+	if ($fromStream) {
+		$stream.CopyTo($OutputMemoryStream)
+	}
+	else {
+		$InputMemoryStream.CopyTo($stream)
+		$stream.Flush()
+	}
+
+	$result = $OutputMemoryStream.ToArray()
+
+	,$result
+}
+
 
 
 
@@ -82,10 +145,10 @@ function TernaryExpression {
 	)
 
 	if ($booleanExpression) {
-		return ,$TrueExpression
+		,$TrueExpression
 	}
 	else {
-		return ,$FalseExpression
+		,$FalseExpression
 	}
 }
 
@@ -157,6 +220,29 @@ function CreateScriptHeader
 	) 
 
 	$sb = (New-Object -TypeName System.Text.StringBuilder)
+
+	[void] $sb.AppendLine(@"
+function passBytesThroughStream  `{
+`t[OutputType([byte[]])]
+`tParam (
+`t`t[Parameter(Mandatory=`$true)] [byte[]] `$bytes,
+`t`t[Parameter(Mandatory=`$true)] [ScriptBlock] `$streamCallback)
+
+`t`$InputMemoryStream = New-Object System.IO.MemoryStream @(,`$bytes)
+`t`$OutputMemoryStream = New-Object System.IO.MemoryStream
+
+`t`$stream = (Invoke-Command `$streamCallback -ArgumentList `$InputMemoryStream)
+
+`t`$stream.CopyTo(`$OutputMemoryStream)
+
+`t`$result = `$OutputMemoryStream.ToArray()
+
+`t,`$result
+`}
+
+"@);
+
+
 	if (![System.String]::IsNullOrEmpty($Password))
 	{
 		        # uncomment these lines and put them in the decryptBytes function below (row "$Dec = $AES.CreateDecryptor()") to troubleshoot encryption
@@ -198,13 +284,7 @@ function decryptBytes `{
 
 `t`$Dec = `$AES.CreateDecryptor()
 
-`t`$EncryptedMemoryStream = New-Object System.IO.MemoryStream @(,`$EncryptedData)
-`t`$DecryptedMemoryStream = New-Object System.IO.MemoryStream
-`t`$CryptoStream = New-Object System.Security.Cryptography.CryptoStream(`$EncryptedMemoryStream, `$Dec, [System.Security.Cryptography.CryptoStreamMode]::Read)
-
-`t`$CryptoStream.CopyTo(`$DecryptedMemoryStream)
-	
-`t`$result = `$DecryptedMemoryStream.ToArray()
+`t[byte[]] `$result = passBytesThroughStream `$EncryptedData { param (`$EncryptedStream) New-Object System.Security.Cryptography.CryptoStream(`$EncryptedStream, `$Dec, [System.Security.Cryptography.CryptoStreamMode] `'Read`') } 
 
 `t,`$result
 `}
@@ -213,16 +293,23 @@ function decryptBytes `{
 	}
 
 	$decryptBytes = TernaryExpression ([System.String]::IsNullOrEmpty($Password)) '' "`$bytes = `$(decryptBytes `$bytes `$password)"
+
 	[void] $sb.AppendLine(@"
 function createFile  `{
 `tparam (
 `t`t[Parameter(Mandatory=`$true)] [String] `$file,
 `t`t[Parameter(Mandatory=`$true)] [byte[]] `$bytes,
 `t`t[Parameter(Mandatory=`$false)] [String] `$password,
-`t`t[Parameter(Mandatory=`$false)] [String] `$hash)
+`t`t[Parameter(Mandatory=`$false)] [String] `$hash,
+`t`t[Parameter(Mandatory=`$false)] [System.Boolean] `$decompress=`$false)
 	
-`t`$null = New-Item -ItemType Directory -Path ([System.IO.Path]::GetDirectoryName(`$file)) -Force
+`t`$null = New-Item -ItemType Directory -Path (Split-Path `$file) -Force
 `t$decryptBytes
+
+`tif (`$decompress) {
+`t`t`$bytes = passBytesThroughStream `$bytes { param (`$EncryptedStream) New-Object System.IO.Compression.DeflateStream(`$EncryptedStream, [System.IO.Compression.CompressionMode ] `'Decompress`') } 
+`t}
+
 `tif (`$global:core) `{ Set-Content -Path `$file -Value `$bytes -AsByteStream -Force `} else `{ Set-Content -Path `$file -Value `$bytes -Encoding Byte -Force `}
 
 `tif (![System.String]::IsNullOrEmpty(`$hash)) `{
@@ -238,5 +325,5 @@ function createFile  `{
 "@)
 	[void] $sb.Append("function createFiles  `{`n`tparam ([Parameter(Mandatory=$(TernaryExpression ([System.String]::IsNullOrEmpty($Password)) "`$false" "`$true"))] [String] `$password)`n`n")
 	[void] $sb.Append("`t`$setContentHelp = (help Set-Content) | Out-String`n`tif (`$setContentHelp.Contains('AsByteStream')) { `$global:core = `$true } else { `$global:core = `$false }`n`n")
-	return $sb
+	,$sb
 }
