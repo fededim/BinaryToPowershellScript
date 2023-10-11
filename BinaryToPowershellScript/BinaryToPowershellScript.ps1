@@ -57,7 +57,7 @@ function BinaryToPowershellScript {
 					$ActualCompress=$true
 				}
 				else {
-					Write-Host -NoNewline "compression useless, disabling it..."
+					Write-Host -NoNewline "compression is useless, disabling it..."
 					$ActualCompress=$false
 				}
 			}
@@ -70,7 +70,7 @@ function BinaryToPowershellScript {
 			}
 			else
 			{
-				[void] $script.Append((TernaryExpression ($Decimal) "`t[byte[]] `$bytes = " "[byte[]] `$bytes = (StringToByteArray `'"))
+				[void] $script.Append((TernaryExpression ($Decimal) "`t[byte[]] `$bytes = " "`t[byte[]] `$bytes = (StringToByteArray `'"))
 				foreach ($b in $bytes)
 				{
 					if ($Decimal)
@@ -368,7 +368,7 @@ function createFile  `{
 
 `t$hashCode
 
-`tWrite-Host "Created file `$file Length `$(`$bytes.Length)"
+`tWrite-Host "Created file `$file length `$(`$bytes.Length)"
 `}
 
 "@)
