@@ -2,6 +2,9 @@
 using System.Collections;
 using System.ComponentModel;
 using System.ComponentModel.Design;
+using System.IO;
+using System.IO.Compression;
+using System.Reflection.Metadata.Ecma335;
 using System.Security.Cryptography;
 using System.Text;
 using CommandLine;
@@ -18,6 +21,9 @@ namespace BinaryToPowershellScript
 
         [Option('b', "base64", Required = false, HelpText = "Specify the base64 file format for the powershell script(s)")]
         public bool Base64 { get; set; }
+
+        [Option('c', "compress", Required = false, HelpText = "Specify to compress the input file(s) with gzip compression")]
+        public bool Compress { get; set; }
 
         [Option('d', "decimal", Required = false, HelpText = "Specify the decimal file format for the powershell script(s)")]
         public bool Decimal { get; set; }
@@ -52,7 +58,7 @@ namespace BinaryToPowershellScript
         {
             using (SHA256 sha256Hash = SHA256.Create())
             {
-                return BitConverter.ToString(sha256Hash.ComputeHash(bytes)).Replace("-",String.Empty);
+                return BitConverter.ToString(sha256Hash.ComputeHash(bytes)).Replace("-", String.Empty);
             }
 
         }
@@ -87,9 +93,80 @@ namespace BinaryToPowershellScript
         }
 
 
+        public static byte[] CopyBytesToStream(byte[] bytes, bool fromStream, Func<Stream, Stream> streamCallback)
+        {
+
+            var inputMemoryStream = new MemoryStream(bytes);
+            var outputMemoryStream = new MemoryStream();
+
+            var stream = streamCallback(fromStream ? inputMemoryStream : outputMemoryStream);
+
+            if (fromStream)
+                stream.CopyTo(outputMemoryStream);
+            else
+            {
+                inputMemoryStream.CopyTo(stream);
+                stream.Flush();
+            }
+
+            return outputMemoryStream.ToArray();
+        }
+
+
+
         private static StringBuilder CreateScriptHeader(Options o)
         {
             var script = new StringBuilder();
+
+            if (o.Compress || !String.IsNullOrEmpty(o.Password))
+            {
+                script.AppendLine(@"
+function copyBytesToStream  {
+    [OutputType([byte[]])]
+    Param (
+        [Parameter(Mandatory=$true)] [byte[]] $bytes,
+        [Parameter(Mandatory=$true)] [System.Boolean] $fromStream,
+        [Parameter(Mandatory=$true)] [ScriptBlock] $streamCallback)
+
+    $InputMemoryStream = New-Object System.IO.MemoryStream @(,$bytes)
+    $OutputMemoryStream = New-Object System.IO.MemoryStream
+
+    $stream = (Invoke-Command $streamCallback -ArgumentList $(if ($fromStream) { $InputMemoryStream } else { $OutputMemoryStream }))
+
+    if ($fromStream) {
+        $stream.CopyTo($OutputMemoryStream)
+    }
+    else {
+        $InputMemoryStream.CopyTo($stream)
+        $stream.Flush()
+    }
+
+    $result = $OutputMemoryStream.ToArray()
+
+    ,$result
+}
+
+");
+            }
+
+            if (!o.Base64 && !o.Decimal)
+            {
+                script.AppendLine(@"
+function StringToByteArray  {
+    [OutputType([byte[]])]
+    Param ([Parameter(Mandatory=$true)] [System.String] $hexstring)
+
+    [byte[]] $bytes = New-Object Byte[] ($hexstring.Length/2)
+    for ($i=0; $i -lt $hexstring.Length;$i+=2) {
+        $bytes[$i/2] = [System.Byte]::Parse($hexstring.Substring($i,2),[System.Globalization.NumberStyles]::HexNumber)
+    }
+    ,$bytes
+    }
+
+");
+            }
+
+
 
 
             if (!String.IsNullOrEmpty(o.Password))
@@ -132,13 +209,7 @@ namespace BinaryToPowershellScript
 
 	$Dec = $AES.CreateDecryptor()
 
-	$EncryptedMemoryStream = New-Object System.IO.MemoryStream @(,$EncryptedData)
-	$DecryptedMemoryStream = New-Object System.IO.MemoryStream
-	$CryptoStream = New-Object System.Security.Cryptography.CryptoStream($EncryptedMemoryStream, $Dec, [System.Security.Cryptography.CryptoStreamMode]::Read)
-
-	$CryptoStream.CopyTo($DecryptedMemoryStream)
-	
-	$result = $DecryptedMemoryStream.ToArray()
+    [byte[]] $result = copyBytesToStream $EncryptedData $true {{ param ($EncryptedStream) New-Object System.Security.Cryptography.CryptoStream($EncryptedStream, $Dec, [System.Security.Cryptography.CryptoStreamMode] 'Read') }} 
 
 	,$result
 }}
@@ -146,26 +217,41 @@ namespace BinaryToPowershellScript
 ");
             }
 
-            var decryptBytes = String.IsNullOrEmpty(o.Password) ? String.Empty : "\t\t$bytes = $(decryptBytes $bytes $password)";
+            var decryptCode = String.IsNullOrEmpty(o.Password) ? String.Empty : "\t\t$bytes = $(decryptBytes $bytes $password)";
+
+            var decompressCodeMultiRow = @"
+        if ($decompress) {
+            $bytes = copyBytesToStream $bytes $true { param ($EncryptedStream) New-Object System.IO.Compression.DeflateStream($EncryptedStream, [System.IO.Compression.CompressionMode ] 'Decompress') } 
+        }
+";
+            var decompressCode = o.Compress ? decompressCodeMultiRow : String.Empty;
+
+
+            var hashCodeMultiRow = @"
+        if (![System.String]::IsNullOrEmpty($hash)) {
+            $actualHash = (Get-FileHash -Path $file -Algorithm Sha256).Hash
+            if ($actualHash -ne $hash) {
+                Write-Error ""Integrity check failed on $file expected $hash actual $actualHash!""
+            }
+        }
+";
+	var hashCode = o.Hash ? hashCodeMultiRow : String.Empty;
+
 
             script.Append($@"function createFile  {{
 	param (
 		[parameter(Mandatory=$true)] [String] $file,
 		[parameter(Mandatory=$true)] [byte[]] $bytes,
 		[parameter(Mandatory=$false)] [String] $password,
-		[parameter(Mandatory=$false)] [String] $hash)
+        [Parameter(Mandatory=$false)] [String] $hash,
+        [Parameter(Mandatory=$false)] [System.Boolean] $decompress=$false)
 	
-		$null = New-Item -ItemType Directory -Path ([System.IO.Path]::GetDirectoryName($file)) -Force
-{decryptBytes}
+		$null = New-Item -ItemType Directory -Path (Split-Path $file) -Force
+{decryptCode}
+{decompressCode}
 		if ($global:core) {{ Set-Content -Path $file -Value $bytes -AsByteStream -Force }} else {{ Set-Content -Path $file -Value $bytes -Encoding Byte -Force }}
 
-        if (![String]::IsNullOrEmpty($hash)) {{
-            $actualHash = (Get-FileHash -Path $file -Algorithm Sha256).Hash
-            if ($actualHash -ne $hash) {{
-                Write-Error ""Integrity check failed on $file expected $hash actual $actualHash!""
-            }}
-        }}
-
+{hashCode}
         Write-Host ""Created file $file Length $($bytes.Length)""
 	}}
 
@@ -185,13 +271,17 @@ namespace BinaryToPowershellScript
         {
             if (String.IsNullOrEmpty(o.OutputFolder))
                 o.OutputFolder = Directory.GetCurrentDirectory();
+            else
+                Directory.CreateDirectory(o.OutputFolder);
 
             StringBuilder script = CreateScriptHeader(o);
 
-            var outputFile = Path.Combine(o.OutputFolder, $"SingleScript{(o.Base64 ? "_base64" : String.Empty)}.ps1");
+            var outputFile = Path.Combine(o.OutputFolder, $"SingleScript.ps1");
 
             foreach (var input in o.Inputs)
             {
+                var actualCompress = false;
+
                 var path = Path.GetDirectoryName(input);
                 foreach (var file in Directory.GetFiles(!String.IsNullOrEmpty(path) ? path : ".", Path.GetFileName(input), o.Recurse ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly))
                 {
@@ -200,12 +290,27 @@ namespace BinaryToPowershellScript
                     {
                         script = CreateScriptHeader(o);
 
-                        outputFile = Path.Combine(o.OutputFolder, $"{Path.GetFileName(file).Replace(".", "_")}_script{(o.Base64 ? "_base64" : String.Empty)}.ps1");
+                        outputFile = Path.Combine(o.OutputFolder, $"{Path.GetFileName(file).Replace(".", "_")}_script.ps1");
                     }
 
-                    Console.WriteLine($"Scripting file {file} {(!o.SingleFile ? $"into {outputFile}..." : String.Empty)}");
+                    Console.Write($"Scripting file {file} {(!o.SingleFile ? $"into {outputFile}..." : String.Empty)}");
 
                     var inputBytes = File.ReadAllBytes(file);
+                    var hash = ComputeSha256Hash(inputBytes);
+
+                    if (o.Compress)
+                    {
+                        var compressedFileBytes = CopyBytesToStream(inputBytes, false, encryptedStream => new DeflateStream(encryptedStream, CompressionMode.Compress));
+
+                        if (compressedFileBytes.Length < inputBytes.Length)
+                        {
+                            inputBytes = compressedFileBytes;
+                            actualCompress = true;
+                        }
+                        else
+                            Console.Write("compression is useless, disabling it...");
+
+                    }
 
                     var bytes = String.IsNullOrEmpty(o.Password) ? inputBytes : EncryptBytes(inputBytes, o.Password);
 
@@ -215,34 +320,45 @@ namespace BinaryToPowershellScript
                     }
                     else
                     {
-                        script.Append("\t[byte[]] $bytes = ");
+                        script.Append(o.Decimal ? "\t[byte[]] $bytes = " : "\t[byte[]] $bytes = (StringToByteArray '");
 
                         foreach (var b in bytes)
                         {
                             if (o.Decimal)
                                 script.Append($"{b.ToString("D")},");
                             else
-                                script.Append($"0x{b.ToString("X2")},");
+                                script.Append($"{b.ToString("X2")}");
                         }
 
-                        script.Length--;
+                        if (!o.Decimal)
+                            script.Append("')");
+                        else
+                            script.Length--;
                     }
 
-                    script.Append($"\n\tcreateFile '{file}' $bytes $password {(o.Hash ? $"'{ComputeSha256Hash(inputBytes)}'":String.Empty)}\n\n");
+                    script.Append($"\n\tcreateFile '{file}' $bytes $password {(o.Hash ? $"'{hash}'" : "''")} {(o.Compress ? $"${actualCompress}" : "$false")}\n\n");
 
                     if (!o.SingleFile)
                     {
                         script.Append($"}}\n\ncreateFiles '{o.Password}'\n");
-                        File.WriteAllText(outputFile, script.ToString());
+
+                        var outputScript = script.ToString();
+                        File.WriteAllText(outputFile, outputScript);
+                        Console.WriteLine($"length {Math.Round(outputScript.Length / 1024.0)}KB.");
                     }
+                    else
+                        Console.WriteLine("");
                 }
             }
 
             if (o.SingleFile)
             {
-                Console.WriteLine($"Creating single script file {outputFile}...");
-                script.Append($"}}\n\ncreateFiles {o.Password}\n");
-                File.WriteAllText(outputFile, script.ToString());
+                script.Append($"}}\n\ncreateFiles '{o.Password}'\n");
+
+                var outputScript = script.ToString();
+                File.WriteAllText(outputFile, outputScript);
+
+                Console.WriteLine($"Created single script file {outputFile} length {Math.Round(outputScript.Length / 1024.0)}KB.");
             }
         }
 
