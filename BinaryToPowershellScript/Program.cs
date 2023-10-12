@@ -22,13 +22,13 @@ namespace BinaryToPowershellScript
         [Option('b', "base64", Required = false, HelpText = "Specify the base64 file format for the powershell script(s)")]
         public bool Base64 { get; set; }
 
-        [Option('c', "compress", Required = false, HelpText = "Specify to compress the input file(s) with gzip compression")]
-        public bool Compress { get; set; }
-
         [Option('d', "decimal", Required = false, HelpText = "Specify the decimal file format for the powershell script(s)")]
         public bool Decimal { get; set; }
 
-        [Option('h', "hash", Required = false, HelpText = "Specify to add a SHA256 hash as check on file integrity for the powershell script(s)")]
+        [Option('c', "compress", Required = false, HelpText = "Specify to compress the input file(s) with gzip compression")]
+        public bool Compress { get; set; }
+
+        [Option('h', "hash", Required = false, HelpText = "Specify to add a SHA256 hash as check on file(s) integrity in the powershell script(s)")]
         public bool Hash { get; set; }
 
         [Option('s', "single", Required = false, HelpText = "Specify to create just a single script file for all input files")]
