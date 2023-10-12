@@ -1,6 +1,8 @@
 # BinaryToPowershellScript
 A simple console application to recreate one or more binary files through a Powershell script. You can choose 2 formats: as an explicit **byte array** (default option, either in hex or decimal format, bigger in size, but it should be more difficult to be detected) or as a **base64** string (option -b, it is shorter). By default it will generate a script file for all specified input files with the **_script.ps1** suffix, if the option -s is specified it will generate a single script called either **SingleScript.ps1**. The generated script should work both on standard PowerShell (tested on  5.1.22621.1778) and PowerShell Core (tested on 7.3.7).
-
+<br />
+<br />
+[How to Transform Binary Files into Powershell Script(s) in Order to Copy Them Silently on a Server](https://www.codeproject.com/Tips/5369565/How-to-Transform-Binary-Files-into-Powershell-Scri)
 # Usage
 
  -i, --inputs          Required. Specify the input file(s) to process, you can use also a wildcard pattern or specify multiple files separted by space<br />
