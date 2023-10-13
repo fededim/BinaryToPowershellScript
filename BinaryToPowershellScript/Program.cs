@@ -302,7 +302,7 @@ function StringToByteArray  {
                     {
                         var compressedFileBytes = CopyBytesToStream(inputBytes, false, encryptedStream => new DeflateStream(encryptedStream, CompressionMode.Compress));
 
-                        if (compressedFileBytes.Length < inputBytes.Length)
+                        if (compressedFileBytes.Length>0 && compressedFileBytes.Length < inputBytes.Length)
                         {
                             inputBytes = compressedFileBytes;
                             actualCompress = true;
