@@ -77,5 +77,8 @@ Scripting file \windows\write.exe into c:\temp\write_exe_script.ps1...
 **Single Base64 Script**
 <img width="1280" alt="image" src="https://github.com/fededim/BinaryToPowershellScript/assets/8364158/85863cc8-8328-4aa4-ab9a-c6fd4cfe30e6">
 
-**ByteArray Script per file**
+**Hex ByteArray Script per file**
 <img width="1280" alt="image" src="https://github.com/fededim/BinaryToPowershellScript/assets/8364158/376fb77d-fef0-48c1-9a98-5460cbb2fce9">
+
+**Decimal ByteArray Script per file**
+<img width="1279" alt="image" src="https://github.com/fededim/BinaryToPowershellScript/assets/8364158/d2d883bb-fa93-48cd-8baa-bbe2dd253a93">
