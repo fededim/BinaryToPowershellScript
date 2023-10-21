@@ -1,6 +1,5 @@
 	# © 2023 Federico Di Marco <fededim@gmail.com>
 
-
 	function BinaryToPowershellScript {
 		[CmdletBinding()]
 		param(
