@@ -3,8 +3,8 @@ A simple C# console application to recreate one or more binary files through a P
 <br />
 Note: In order to bypass the most hardened environments I have implemented the same C# code also in Powershell, you can find it [here](https://github.com/fededim/BinaryToPowershellScript/blob/master/BinaryToPowershellScript/BinaryToPowershellScript.ps1) together with C# code. To bypass Powershell execution policies you can simply copy the code and paste it inside a Powershell console and hit return, after having done this you can convert any file you want just by calling the function BinaryToPowershellScript with the same below parameters.
 
-<br />
-CodeProject detailed article about how to use it: [How to Transform Binary Files into Powershell Script(s) in Order to Copy Them Silently on a Server](https://www.codeproject.com/Tips/5369565/How-to-Transform-Binary-Files-into-Powershell-Scri)
+CodeProject detailed article about how to use this code: 
+[How to Transform Binary Files into Powershell Script(s) in Order to Copy them Silently on a Server](https://www.codeproject.com/Articles/5369565/How-to-Transform-Binary-Files-into-Powershell-Scri)
 
 # Usage
 
