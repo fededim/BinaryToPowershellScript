@@ -59,7 +59,7 @@
 						$ActualCompress=$true
 					}
 					else {
-						Write-Host -NoNewline "compression is useless, disabling it..."
+						Write-Host -NoNewline "compressed file [$([Math]::Round($compressedFileBytes.Length/1024))KB] is longer than original file [$([Math]::Round($inputFileBytes.Length/1024))KB], disabling it..."
 						$ActualCompress=$false
 					}
 				}
@@ -96,7 +96,12 @@
 
 				[void] $script.Append("`n`tcreateFile `'$file`' `$bytes `$password $hashParameter $decompressParameter`n`n")
 				if (!$SingleFile) {
-					[void] $script.Append("`}`n`ncreateFiles `'$Password`'`n")
+					if ([System.String]::IsNullOrEmpty($Password)) {
+						[void] $script.Append("`}`n`ncreateFiles `'`'`n")
+					}
+					else {
+						[void] $script.Append("`}`n`ncreateFiles ([System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR((Read-Host `'Enter password`' -AsSecureString))))`n")
+					}
 
 					$outputScript = $script.ToString()
 					[System.IO.File]::WriteAllText($outputFile,$outputScript)
@@ -109,7 +114,12 @@
 		}
 		if ($SingleFile)
 		{
-			[void] $script.Append("`}`n`ncreateFiles `'$Password`'`n")
+			if ([System.String]::IsNullOrEmpty($Password)) {
+				[void] $script.Append("`}`n`ncreateFiles `'`'`n")
+			}
+			else {
+				[void] $script.Append("`}`n`ncreateFiles ([System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR((Read-Host `'Enter password`' -AsSecureString))))`n")
+			}
 
 			$outputScript = $script.ToString()
 			[System.IO.File]::WriteAllText($outputFile,$outputScript)
@@ -135,7 +145,7 @@
 		}
 		else {
 			$InputMemoryStream.CopyTo($stream)
-			$stream.Flush()
+			$stream.Dispose()
 		}
 
 		$result = $OutputMemoryStream.ToArray()
@@ -252,7 +262,7 @@
 	`t}
 	`telse {
 	`t`t`$InputMemoryStream.CopyTo(`$stream)
-	`t`t`$stream.Flush()
+	`t`t`$stream.Dispose()
 	`t}
 
 	`t`$result = `$OutputMemoryStream.ToArray()
