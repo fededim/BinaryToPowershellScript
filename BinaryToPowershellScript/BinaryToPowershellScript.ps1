@@ -59,7 +59,7 @@
 						$ActualCompress=$true
 					}
 					else {
-						Write-Host -NoNewline "compressed file [$([Math]::Round($compressedFileBytes.Length/1024))KB] is longer than original file [$([Math]::Round($inputFileBytes.Length/1024))KB], disabling it..."
+						Write-Host -NoNewline "compressed file [$([Math]::Round($compressedFileBytes.Length/1024))KB] is longer than original file [$([Math]::Round($inputFileBytes.Length/1024))KB], disabling compression..."
 						$ActualCompress=$false
 					}
 				}
