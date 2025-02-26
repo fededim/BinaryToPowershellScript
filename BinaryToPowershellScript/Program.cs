@@ -106,7 +106,7 @@ namespace BinaryToPowershellScript
             else
             {
                 inputMemoryStream.CopyTo(stream);
-                stream.Flush();
+                stream.Dispose();
             }
 
             return outputMemoryStream.ToArray();
@@ -138,7 +138,7 @@ function copyBytesToStream  {
     }
     else {
         $InputMemoryStream.CopyTo($stream)
-        $stream.Flush()
+        $stream.Dispose()
     }
 
     $result = $OutputMemoryStream.ToArray()
@@ -235,7 +235,7 @@ function StringToByteArray  {
             }
         }
 ";
-	var hashCode = o.Hash ? hashCodeMultiRow : String.Empty;
+            var hashCode = o.Hash ? hashCodeMultiRow : String.Empty;
 
 
             script.Append($@"function createFile  {{
@@ -302,13 +302,13 @@ function StringToByteArray  {
                     {
                         var compressedFileBytes = CopyBytesToStream(inputBytes, false, encryptedStream => new DeflateStream(encryptedStream, CompressionMode.Compress));
 
-                        if (compressedFileBytes.Length>0 && compressedFileBytes.Length < inputBytes.Length)
+                        if (compressedFileBytes.Length > 0 && compressedFileBytes.Length < inputBytes.Length)
                         {
                             inputBytes = compressedFileBytes;
                             actualCompress = true;
                         }
                         else
-                            Console.Write("compression is useless, disabling it...");
+                            Console.Write($"compressed file [{Math.Round(compressedFileBytes.Length * 1.0 / 1024)}KB] is longer than original file [{Math.Round(inputBytes.Length * 1.0 / 1024)}KB], disabling compression...");
 
                     }
 
@@ -340,7 +340,10 @@ function StringToByteArray  {
 
                     if (!o.SingleFile)
                     {
-                        script.Append($"}}\n\ncreateFiles '{o.Password}'\n");
+                        if (String.IsNullOrEmpty(o.Password))
+                            script.Append($"}}\n\ncreateFiles ''\n");
+                        else
+                            script.Append($"}}\n\ncreateFiles ([System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR((Read-Host 'Enter password' -AsSecureString))))\n");
 
                         var outputScript = script.ToString();
                         File.WriteAllText(outputFile, outputScript);
@@ -353,7 +356,10 @@ function StringToByteArray  {
 
             if (o.SingleFile)
             {
-                script.Append($"}}\n\ncreateFiles '{o.Password}'\n");
+                if (String.IsNullOrEmpty(o.Password))
+                    script.Append($"}}\n\ncreateFiles ''\n");
+                else
+                    script.Append($"}}\n\ncreateFiles ([System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR((Read-Host 'Enter password' -AsSecureString))))\n");
 
                 var outputScript = script.ToString();
                 File.WriteAllText(outputFile, outputScript);
